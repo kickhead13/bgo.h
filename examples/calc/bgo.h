@@ -1,4 +1,11 @@
+/*
+ * LICENSE : This library is licensed under the GNU Public License Version 3 (29 june 2007).
+ * ORIGINAL AUTHOR: kickhead13
+ * ORIGINAL REPO: https://github.com/kickhead13/bgo.h
+ *
+ * */
 #ifndef __BGO_H__
+#define __BGO_H__
 
 #include <stdio.h>  /* printf */ 
 #include <string.h> /* strcmp, strcpy, strcat */
@@ -55,8 +62,9 @@ void __bgo_add_opt(bgo_opts_t *, bgo_opt_t *);
 void __bgo_set_bool(bgo_opt_t *);
 void __bgo_set_int(bgo_opt_t *, int);
 void __bgo_set_str(bgo_opt_t *, char*); 
+void __bgo_free(bgo_opts_t *);
 bgo_opt_t * __bgo_find_opt(bgo_opts_t *, char*);
-
+bgo_opt_t * __new_opt_t(const char*, const char*, enum bgo_type);
 
 void bgo_init(bgo_opts_t * opts) {
   opts -> head = NULL;
@@ -110,7 +118,7 @@ void __bgo_add_opt(bgo_opts_t * opts, bgo_opt_t * opt) {
   opts -> tail = opt;
 }
 
-void bgo_add_flag(bgo_opts_t *opts, const char *sf, const char *lf, int *value) {
+bgo_opt_t * __bgo_new_opt_t(const char *sf, const char *lf, void * value, enum bgo_type vtype) {
   bgo_opt_t * opt = (bgo_opt_t*)malloc(sizeof(bgo_opt_t));
   QUIT_ON_NULL(opt, "(bgo.h) Couldn't allocate HEAP memory for boolean flag option.\n", -1);
 
@@ -124,75 +132,57 @@ void bgo_add_flag(bgo_opts_t *opts, const char *sf, const char *lf, int *value) 
   strcpy((opt -> fv)[0], sf);
   strcpy((opt -> fv)[1], lf);
 
-  opt -> value = (void*)value;
-  opt -> vtype = BGO_BOOL;
+  opt -> value = value;
+  opt -> vtype = vtype;
   opt -> next = NULL;
   opt -> prev = NULL;
-  __bgo_add_opt(opts, opt);
 
-  (opts -> info -> opts)[opts->len] = (char*)malloc(sizeof(char) + (strlen(sf) + strlen(lf) + 4));
+  return opt;
+}
+
+void __info_add_fv(bgo_opts_t *opts, const char *sf, const char *lf, enum bgo_type vtype) {
+  size_t alen = 4;
+  if(vtype == BGO_BOOL) alen = 12;
+
+  (opts -> info -> opts)[opts->len] = (char*)malloc(sizeof(char) + (strlen(sf) + strlen(lf) + alen));
   strcpy((opts -> info -> opts)[opts -> len], sf);
   strcat((opts -> info -> opts)[opts -> len], ", ");
   strcat((opts -> info -> opts)[opts -> len], lf);
+  
+  switch(vtype) {
+    case BGO_INT: 
+      strcat((opts -> info -> opts)[opts -> len], " <INT> ");
+      break;
+    case BGO_STR:
+      strcat((opts -> info -> opts)[opts -> len], " <STR> ");
+      break;
+    case BGO_BOOL:
+    default:
+      break;
+  }
+
   opts -> len = (opts->len) + 1;
+
+}
+
+void __bgo_add(bgo_opts_t *opts, const char *sf, const char *lf, void *value, enum bgo_type vtype) {
+  bgo_opt_t * opt = __bgo_new_opt_t(sf, lf, value, vtype);
+
+  __bgo_add_opt(opts, opt);
+
+  __info_add_fv(opts, sf, lf, vtype);
+}
+
+void bgo_add_flag(bgo_opts_t *opts, const char *sf, const char *lf, int *value) {
+  __bgo_add(opts, sf, lf, (void*)value, BGO_BOOL);
 }
 
 void bgo_add_int_flag(bgo_opts_t *opts, const char *sf, const char *lf, int *value) {
-  bgo_opt_t * opt = (bgo_opt_t*)malloc(sizeof(bgo_opt_t));
-  QUIT_ON_NULL(opt, "(bgo.h) Couldn't allocate HEAP memory for boolean flag option.\n", -1);
-
-  opt -> fv = (char**)malloc(sizeof(char*) * 2);
-  QUIT_ON_NULL(opt -> fv, "(bgo.h) Couldn't allocate HEAP memory for boolean flag variants list.\n", -1);
-
-  (opt -> fv)[0] = (char*)malloc(sizeof(char) * (strlen(sf) + 1));
-  (opt -> fv)[1] = (char*)malloc(sizeof(char) * (strlen(lf) + 1));
-  QUIT_ON_NULL((opt -> fv)[0], "(bgo.h) Couldn't allocate HEAP memory for boolean flag variants list.\n", -1);
-  QUIT_ON_NULL((opt -> fv)[1], "(bgo.h) Couldn't allocate HEAP memory for boolean flag variants list.\n", -1);
-  strcpy((opt -> fv)[0], sf);
-  strcpy((opt -> fv)[1], lf);
-
-  opt -> value = (void*)value;
-  opt -> vtype = BGO_INT;
-  opt -> next = NULL;
-  opt -> prev = NULL;
-
-  __bgo_add_opt(opts, opt);
-
-  (opts -> info -> opts)[opts->len] = (char*)malloc(sizeof(char) + (strlen(sf) + strlen(lf) + 12));
-  strcpy((opts -> info -> opts)[opts -> len], sf);
-  strcat((opts -> info -> opts)[opts -> len], ", ");
-  strcat((opts -> info -> opts)[opts -> len], lf);
-  strcat((opts -> info -> opts)[opts -> len], " <INT> ");
-  opts -> len = (opts->len) + 1;
+  __bgo_add(opts, sf, lf, (void*)value, BGO_INT);
 }
 
 void bgo_add_str_flag(bgo_opts_t *opts, const char *sf, const char *lf, char **value) {
-  bgo_opt_t * opt = (bgo_opt_t*)malloc(sizeof(bgo_opt_t));
-  QUIT_ON_NULL(opt, "(bgo.h) Couldn't allocate HEAP memory for boolean flag option.\n", -1);
-
-  opt -> fv = (char**)malloc(sizeof(char*) * 2);
-  QUIT_ON_NULL(opt -> fv, "(bgo.h) Couldn't allocate HEAP memory for boolean flag variants list.\n", -1);
-
-  (opt -> fv)[0] = (char*)malloc(sizeof(char) * (strlen(sf) + 1));
-  (opt -> fv)[1] = (char*)malloc(sizeof(char) * (strlen(lf) + 1));
-  QUIT_ON_NULL((opt -> fv)[0], "(bgo.h) Couldn't allocate HEAP memory for boolean flag variants list.\n", -1);
-  QUIT_ON_NULL((opt -> fv)[1], "(bgo.h) Couldn't allocate HEAP memory for boolean flag variants list.\n", -1);
-  strcpy((opt -> fv)[0], sf);
-  strcpy((opt -> fv)[1], lf);
-
-  opt -> value = (void*)value;
-  opt -> vtype = BGO_STR;
-  opt -> next = NULL;
-  opt -> prev = NULL;
-
-  __bgo_add_opt(opts, opt);
-
-  (opts -> info -> opts)[opts->len] = (char*)malloc(sizeof(char) + (strlen(sf) + strlen(lf) + 12));
-  strcpy((opts -> info -> opts)[opts -> len], sf);
-  strcat((opts -> info -> opts)[opts -> len], ", ");
-  strcat((opts -> info -> opts)[opts -> len], lf);
-  strcat((opts -> info -> opts)[opts -> len], " <STR> ");
-  opts -> len = (opts->len) + 1;
+  __bgo_add(opts, sf, lf, (void*)value, BGO_STR);
 }
 
 
@@ -254,6 +244,10 @@ bgo_opt_t * __bgo_find_opt(bgo_opts_t * opts, char * fv) {
   return NULL;
 }
 
+void __bgo_free(bgo_opts_t * opts) {
+  // TODO
+}
+
 void bgo(bgo_opts_t * opts, int argc, char ** argv) {
   size_t iter = 1;
   bgo_opt_t * opt;
@@ -284,6 +278,8 @@ void bgo(bgo_opts_t * opts, int argc, char ** argv) {
     }
   }
   
+  __bgo_free(opts);
+
 }
 
 #endif

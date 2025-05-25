@@ -118,7 +118,7 @@ void __bgo_add_opt(bgo_opts_t * opts, bgo_opt_t * opt) {
   opts -> tail = opt;
 }
 
-bgo_opt_t * __bgo_new_opt_t(const char *sf, const char *lf, enum bgo_type vtype) {
+bgo_opt_t * __bgo_new_opt_t(const char *sf, const char *lf, void * value, enum bgo_type vtype) {
   bgo_opt_t * opt = (bgo_opt_t*)malloc(sizeof(bgo_opt_t));
   QUIT_ON_NULL(opt, "(bgo.h) Couldn't allocate HEAP memory for boolean flag option.\n", -1);
 
@@ -131,53 +131,58 @@ bgo_opt_t * __bgo_new_opt_t(const char *sf, const char *lf, enum bgo_type vtype)
   QUIT_ON_NULL((opt -> fv)[1], "(bgo.h) Couldn't allocate HEAP memory for boolean flag variants list.\n", -1);
   strcpy((opt -> fv)[0], sf);
   strcpy((opt -> fv)[1], lf);
+
+  opt -> value = value;
   opt -> vtype = vtype;
   opt -> next = NULL;
   opt -> prev = NULL;
 
-
   return opt;
 }
 
-void bgo_add_flag(bgo_opts_t *opts, const char *sf, const char *lf, int *value) {
-  bgo_opt_t * opt = __bgo_new_opt_t(sf, lf, BGO_BOOL);
+void __info_add_fv(bgo_opts_t *opts, const char *sf, const char *lf, enum bgo_type vtype) {
+  size_t alen = 4;
+  if(vtype == BGO_BOOL) alen = 12;
 
-  opt -> value = (void*)value;
-  __bgo_add_opt(opts, opt);
-
-  (opts -> info -> opts)[opts->len] = (char*)malloc(sizeof(char) + (strlen(sf) + strlen(lf) + 4));
+  (opts -> info -> opts)[opts->len] = (char*)malloc(sizeof(char) + (strlen(sf) + strlen(lf) + alen));
   strcpy((opts -> info -> opts)[opts -> len], sf);
   strcat((opts -> info -> opts)[opts -> len], ", ");
   strcat((opts -> info -> opts)[opts -> len], lf);
+  
+  switch(vtype) {
+    case BGO_INT: 
+      strcat((opts -> info -> opts)[opts -> len], " <INT> ");
+      break;
+    case BGO_STR:
+      strcat((opts -> info -> opts)[opts -> len], " <STR> ");
+      break;
+    case BGO_BOOL:
+    default:
+      break;
+  }
+
   opts -> len = (opts->len) + 1;
+
+}
+
+void __bgo_add(bgo_opts_t *opts, const char *sf, const char *lf, void *value, enum bgo_type vtype) {
+  bgo_opt_t * opt = __bgo_new_opt_t(sf, lf, value, vtype);
+
+  __bgo_add_opt(opts, opt);
+
+  __info_add_fv(opts, sf, lf, vtype);
+}
+
+void bgo_add_flag(bgo_opts_t *opts, const char *sf, const char *lf, int *value) {
+  __bgo_add(opts, sf, lf, (void*)value, BGO_BOOL);
 }
 
 void bgo_add_int_flag(bgo_opts_t *opts, const char *sf, const char *lf, int *value) {
-  bgo_opt_t * opt = __bgo_new_opt_t(sf, lf, BGO_INT);
- 
-  opt -> value = (void*)value;
-  __bgo_add_opt(opts, opt);
-
-  (opts -> info -> opts)[opts->len] = (char*)malloc(sizeof(char) + (strlen(sf) + strlen(lf) + 12));
-  strcpy((opts -> info -> opts)[opts -> len], sf);
-  strcat((opts -> info -> opts)[opts -> len], ", ");
-  strcat((opts -> info -> opts)[opts -> len], lf);
-  strcat((opts -> info -> opts)[opts -> len], " <INT> ");
-  opts -> len = (opts->len) + 1;
+  __bgo_add(opts, sf, lf, (void*)value, BGO_INT);
 }
 
 void bgo_add_str_flag(bgo_opts_t *opts, const char *sf, const char *lf, char **value) {
-  bgo_opt_t * opt = __bgo_new_opt_t(sf, lf, BGO_STR);
-  
-  opt -> value = (void*)value;
-  __bgo_add_opt(opts, opt);
-
-  (opts -> info -> opts)[opts->len] = (char*)malloc(sizeof(char) + (strlen(sf) + strlen(lf) + 12));
-  strcpy((opts -> info -> opts)[opts -> len], sf);
-  strcat((opts -> info -> opts)[opts -> len], ", ");
-  strcat((opts -> info -> opts)[opts -> len], lf);
-  strcat((opts -> info -> opts)[opts -> len], " <STR> ");
-  opts -> len = (opts->len) + 1;
+  __bgo_add(opts, sf, lf, (void*)value, BGO_STR);
 }
 
 
