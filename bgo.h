@@ -1,6 +1,7 @@
 /*
- * LICENSE : This library is license under the GNU Public License Version 3 (29 june 2007).
+ * LICENSE : This library is licensed under the GNU Public License Version 3 (29 june 2007).
  * ORIGINAL AUTHOR: kickhead13
+ * ORIGINAL REPO: https://github.com/kickhead13/bgo.h
  *
  * */
 #ifndef __BGO_H__
@@ -63,7 +64,7 @@ void __bgo_set_int(bgo_opt_t *, int);
 void __bgo_set_str(bgo_opt_t *, char*); 
 void __bgo_free(bgo_opts_t *);
 bgo_opt_t * __bgo_find_opt(bgo_opts_t *, char*);
-
+bgo_opt_t * __new_opt_t(const char*, const char*, enum bgo_type);
 
 void bgo_init(bgo_opts_t * opts) {
   opts -> head = NULL;
@@ -117,7 +118,7 @@ void __bgo_add_opt(bgo_opts_t * opts, bgo_opt_t * opt) {
   opts -> tail = opt;
 }
 
-void bgo_add_flag(bgo_opts_t *opts, const char *sf, const char *lf, int *value) {
+bgo_opt_t * __bgo_new_opt_t(const char *sf, const char *lf, enum bgo_type vtype) {
   bgo_opt_t * opt = (bgo_opt_t*)malloc(sizeof(bgo_opt_t));
   QUIT_ON_NULL(opt, "(bgo.h) Couldn't allocate HEAP memory for boolean flag option.\n", -1);
 
@@ -130,11 +131,18 @@ void bgo_add_flag(bgo_opts_t *opts, const char *sf, const char *lf, int *value) 
   QUIT_ON_NULL((opt -> fv)[1], "(bgo.h) Couldn't allocate HEAP memory for boolean flag variants list.\n", -1);
   strcpy((opt -> fv)[0], sf);
   strcpy((opt -> fv)[1], lf);
-
-  opt -> value = (void*)value;
-  opt -> vtype = BGO_BOOL;
+  opt -> vtype = vtype;
   opt -> next = NULL;
   opt -> prev = NULL;
+
+
+  return opt;
+}
+
+void bgo_add_flag(bgo_opts_t *opts, const char *sf, const char *lf, int *value) {
+  bgo_opt_t * opt = __bgo_new_opt_t(sf, lf, BGO_BOOL);
+
+  opt -> value = (void*)value;
   __bgo_add_opt(opts, opt);
 
   (opts -> info -> opts)[opts->len] = (char*)malloc(sizeof(char) + (strlen(sf) + strlen(lf) + 4));
@@ -145,24 +153,9 @@ void bgo_add_flag(bgo_opts_t *opts, const char *sf, const char *lf, int *value) 
 }
 
 void bgo_add_int_flag(bgo_opts_t *opts, const char *sf, const char *lf, int *value) {
-  bgo_opt_t * opt = (bgo_opt_t*)malloc(sizeof(bgo_opt_t));
-  QUIT_ON_NULL(opt, "(bgo.h) Couldn't allocate HEAP memory for boolean flag option.\n", -1);
-
-  opt -> fv = (char**)malloc(sizeof(char*) * 2);
-  QUIT_ON_NULL(opt -> fv, "(bgo.h) Couldn't allocate HEAP memory for boolean flag variants list.\n", -1);
-
-  (opt -> fv)[0] = (char*)malloc(sizeof(char) * (strlen(sf) + 1));
-  (opt -> fv)[1] = (char*)malloc(sizeof(char) * (strlen(lf) + 1));
-  QUIT_ON_NULL((opt -> fv)[0], "(bgo.h) Couldn't allocate HEAP memory for boolean flag variants list.\n", -1);
-  QUIT_ON_NULL((opt -> fv)[1], "(bgo.h) Couldn't allocate HEAP memory for boolean flag variants list.\n", -1);
-  strcpy((opt -> fv)[0], sf);
-  strcpy((opt -> fv)[1], lf);
-
+  bgo_opt_t * opt = __bgo_new_opt_t(sf, lf, BGO_INT);
+ 
   opt -> value = (void*)value;
-  opt -> vtype = BGO_INT;
-  opt -> next = NULL;
-  opt -> prev = NULL;
-
   __bgo_add_opt(opts, opt);
 
   (opts -> info -> opts)[opts->len] = (char*)malloc(sizeof(char) + (strlen(sf) + strlen(lf) + 12));
@@ -174,24 +167,9 @@ void bgo_add_int_flag(bgo_opts_t *opts, const char *sf, const char *lf, int *val
 }
 
 void bgo_add_str_flag(bgo_opts_t *opts, const char *sf, const char *lf, char **value) {
-  bgo_opt_t * opt = (bgo_opt_t*)malloc(sizeof(bgo_opt_t));
-  QUIT_ON_NULL(opt, "(bgo.h) Couldn't allocate HEAP memory for boolean flag option.\n", -1);
-
-  opt -> fv = (char**)malloc(sizeof(char*) * 2);
-  QUIT_ON_NULL(opt -> fv, "(bgo.h) Couldn't allocate HEAP memory for boolean flag variants list.\n", -1);
-
-  (opt -> fv)[0] = (char*)malloc(sizeof(char) * (strlen(sf) + 1));
-  (opt -> fv)[1] = (char*)malloc(sizeof(char) * (strlen(lf) + 1));
-  QUIT_ON_NULL((opt -> fv)[0], "(bgo.h) Couldn't allocate HEAP memory for boolean flag variants list.\n", -1);
-  QUIT_ON_NULL((opt -> fv)[1], "(bgo.h) Couldn't allocate HEAP memory for boolean flag variants list.\n", -1);
-  strcpy((opt -> fv)[0], sf);
-  strcpy((opt -> fv)[1], lf);
-
+  bgo_opt_t * opt = __bgo_new_opt_t(sf, lf, BGO_STR);
+  
   opt -> value = (void*)value;
-  opt -> vtype = BGO_STR;
-  opt -> next = NULL;
-  opt -> prev = NULL;
-
   __bgo_add_opt(opts, opt);
 
   (opts -> info -> opts)[opts->len] = (char*)malloc(sizeof(char) + (strlen(sf) + strlen(lf) + 12));
