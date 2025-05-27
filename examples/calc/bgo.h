@@ -19,7 +19,7 @@
     exit((exit_val));\
   }
 #define __BGO_PRINTF_NOT_NULL(str)\
-  if((str) != NULL) printf("%s", (str));
+  if((str) != NULL) printf("%s\n", (str));
 
 enum bgo_type {
   BGO_INT = 0,
@@ -30,6 +30,7 @@ enum bgo_type {
 
 typedef struct opt_t {
   void         *  value;
+  char         *   desc;
   char         **    fv;
   struct opt_t *   next;
   struct opt_t *   prev;
@@ -47,10 +48,10 @@ typedef struct opts_t {
 void bgo_init(bgo_opts_t *);
 void bgo_add_desc(bgo_opts_t *, const char*);
 void bgo_add_name(bgo_opts_t *, const char*);
-void bgo_add_flag(bgo_opts_t *, const char*, const char*, int *);
-void bgo_add_int_flag(bgo_opts_t *, const char*, const char*, int *);
-void bgo_add_str_flag(bgo_opts_t *, const char*, const char*, char **);
-void bgo_add_mul_flag(bgo_opts_t *, const char*, const char*, char ***);
+void bgo_add_flag(bgo_opts_t *, const char*, const char*, int *, char *);
+void bgo_add_int_flag(bgo_opts_t *, const char*, const char*, int *, char *);
+void bgo_add_str_flag(bgo_opts_t *, const char*, const char*, char **, char *);
+void bgo_add_mul_flag(bgo_opts_t *, const char*, const char*, char ***, char *);
 void bgo(bgo_opts_t *, int, char **);
 void __bgo_disp_help(bgo_opts_t *);
 void __bgo_add_opt(bgo_opts_t *, bgo_opt_t *);
@@ -96,24 +97,35 @@ void __bgo_disp_help(bgo_opts_t * opts) {
 
   printf("\nOPTIONS:\n");
   bgo_opt_t * opt = opts -> head;
+  int flen = 0;
+  for(;opt; opt = opt -> next) {
+    size_t oflen = strlen((opt->fv)[0]) + strlen((opt->fv)[1]);
+    if(oflen > flen) flen = oflen;
+  }
+
+  opt = opts -> head;
   for(;opt; opt = opt->next) {
-    printf("\t%s, %s ", (opt -> fv)[0], (opt->fv)[1]);
+    printf("\t%s, %-*s ", (opt -> fv)[0], flen, (opt->fv)[1]);
     switch(opt->vtype) {
       case BGO_INT:
-        printf("<INT>\n");
+        printf("<INT>             %s\n", opt->desc ? opt->desc : "");
         break;
       case BGO_STR:
-        printf("<STR>\n");
+        printf("<STR>             %s\n", opt->desc ? opt->desc : "");
         break;
       case BGO_MUL:
-        printf("<STR STR ...>\n");
+        printf("<STR STR ...>     %s\n", opt->desc ? opt->desc : "");
         break;
       case BGO_BOOL:
       default:
-        printf("\n");
+        printf("                  %s\n", opt->desc ? opt->desc : "");
         break;
     }
   }
+  printf("\t-h, %-*s                   displays this message\n",flen, "--help");
+
+
+  __bgo_free(opts);
 }
   
 void __bgo_add_opt(bgo_opts_t * opts, bgo_opt_t * opt) {
@@ -127,7 +139,7 @@ void __bgo_add_opt(bgo_opts_t * opts, bgo_opt_t * opt) {
   opts -> tail = opt;
 }
 
-bgo_opt_t * __bgo_new_opt_t(const char *sf, const char *lf, void * value, enum bgo_type vtype) {
+bgo_opt_t * __bgo_new_opt_t(const char *sf, const char *lf, void * value, char *desc, enum bgo_type vtype) {
   bgo_opt_t * opt = (bgo_opt_t*)malloc(sizeof(bgo_opt_t));
   __BGO_QUIT_ON_NULL(opt, "(bgo.h) Couldn't allocate HEAP memory for boolean flag option.\n", -1);
 
@@ -141,6 +153,7 @@ bgo_opt_t * __bgo_new_opt_t(const char *sf, const char *lf, void * value, enum b
   strcpy((opt -> fv)[0], sf);
   strcpy((opt -> fv)[1], lf);
 
+  opt -> desc = desc;
   opt -> value = value;
   opt -> vtype = vtype;
   opt -> next = NULL;
@@ -149,26 +162,26 @@ bgo_opt_t * __bgo_new_opt_t(const char *sf, const char *lf, void * value, enum b
   return opt;
 }
 
-void __bgo_add(bgo_opts_t *opts, const char *sf, const char *lf, void *value, enum bgo_type vtype) {
-  bgo_opt_t * opt = __bgo_new_opt_t(sf, lf, value, vtype);
+void __bgo_add(bgo_opts_t *opts, const char *sf, const char *lf, void *value, char *desc, enum bgo_type vtype) {
+  bgo_opt_t * opt = __bgo_new_opt_t(sf, lf, value, desc, vtype);
 
   __bgo_add_opt(opts, opt);
 }
 
-void bgo_add_flag(bgo_opts_t *opts, const char *sf, const char *lf, int *value) {
-  __bgo_add(opts, sf, lf, (void*)value, BGO_BOOL);
+void bgo_add_flag(bgo_opts_t *opts, const char *sf, const char *lf, int *value, char *desc) {
+  __bgo_add(opts, sf, lf, (void*)value, desc, BGO_BOOL);
 }
 
-void bgo_add_int_flag(bgo_opts_t *opts, const char *sf, const char *lf, int *value) {
-  __bgo_add(opts, sf, lf, (void*)value, BGO_INT);
+void bgo_add_int_flag(bgo_opts_t *opts, const char *sf, const char *lf, int *value, char *desc) {
+  __bgo_add(opts, sf, lf, (void*)value, desc, BGO_INT);
 }
 
-void bgo_add_str_flag(bgo_opts_t *opts, const char *sf, const char *lf, char **value) {
-  __bgo_add(opts, sf, lf, (void*)value, BGO_STR);
+void bgo_add_str_flag(bgo_opts_t *opts, const char *sf, const char *lf, char **value, char *desc) {
+  __bgo_add(opts, sf, lf, (void*)value, desc, BGO_STR);
 }
 
-void bgo_add_mul_flag(bgo_opts_t *opts, const char *sf, const char *lf, char ***value) {
-  __bgo_add(opts, sf, lf, (void*)value, BGO_MUL);
+void bgo_add_mul_flag(bgo_opts_t *opts, const char *sf, const char *lf, char ***value, char *desc) {
+  __bgo_add(opts, sf, lf, (void*)value, desc, BGO_MUL);
 }
 
 void __bgo_set_bool(bgo_opt_t * opt) {
@@ -181,7 +194,7 @@ void __bgo_set_bool(bgo_opt_t * opt) {
     __BGO_EWRITEL(" bool flags.\n");
     exit(-1);
   }
-  *((int*)(opt -> value)) = 1;
+  if(opt -> value != NULL) *((int*)(opt -> value)) = 1;
 
 }
 
@@ -195,7 +208,7 @@ void __bgo_set_int(bgo_opt_t * opt, int value) {
     __BGO_EWRITEL(" int flags.\n");
     exit(-1);
   }
-  *((int*)(opt -> value)) = value;
+  if(opt -> value != NULL) *((int*)(opt -> value)) = value;
 
 }
 
@@ -212,10 +225,11 @@ void __bgo_set_str(bgo_opt_t * opt, char * value) {
 
 
   // TODO: FREE STUFF HERE ??
-
-  *((char**)(opt -> value)) = (char*)malloc( (strlen(value) + 1)); 
-  strcpy(*((char**)(opt -> value)), value);
-
+  
+  if(opt -> value != NULL) {
+    *((char**)(opt -> value)) = (char*)malloc( (strlen(value) + 1)); 
+    strcpy(*((char**)(opt -> value)), value);
+  }
 }
 
 size_t __bgo_set_mul(bgo_opts_t * opts, bgo_opt_t * opt, int argc, char ** argv, size_t offset) {
@@ -253,7 +267,17 @@ bgo_opt_t * __bgo_find_opt(bgo_opts_t * opts, char * fv) {
 }
 
 void __bgo_free(bgo_opts_t * opts) {
-  // TODO
+  bgo_opt_t * opt = opts -> tail;
+  while(opt != NULL) {
+    if(opt->next != NULL) free(opt -> next);
+    free((opt->fv)[0]);
+    free((opt->fv)[1]);
+    free(opt -> fv);
+    opt = opt -> prev;
+  }
+  free(opts -> head);
+  free(opts -> usage);
+  free(opts -> desc);
 }
 
 void bgo(bgo_opts_t * opts, int argc, char ** argv) {
