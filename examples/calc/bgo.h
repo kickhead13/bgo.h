@@ -12,20 +12,20 @@
 #include <unistd.h> /* write */
 #include <stdlib.h> /* exit */
 
-#define BASE_CHAR_LEN 50
-#define EWRITEL(message) write(2, (message), sizeof((message)))
-#define QUIT_ON_NULL(ptr, message, exit_val)\
+#define __BGO_EWRITEL(message) write(2, (message), (sizeof((message)) - 1))
+#define __BGO_QUIT_ON_NULL(ptr, message, exit_val)\
   if((ptr) == NULL) {\
-    EWRITEL((message));\
+    __BGO_EWRITEL((message));\
     exit((exit_val));\
   }
-#define PRINTF_IF_NOT_NULL(str)\
+#define __BGO_PRINTF_NOT_NULL(str)\
   if((str) != NULL) printf("%s", (str));
 
 enum bgo_type {
   BGO_INT = 0,
   BGO_STR = 1,
-  BGO_BOOL = 2
+  BGO_BOOL = 2,
+  BGO_MUL = 3
 };
 
 typedef struct opt_t {
@@ -36,17 +36,11 @@ typedef struct opt_t {
   enum bgo_type   vtype;
 } bgo_opt_t;
 
-typedef struct info_t {
-  char  * usage;
-  char  *  desc;
-  char  ** opts;
-  char  *  exmp;
-} bgo_info_t;
-
 typedef struct opts_t {
   bgo_opt_t  * head;
   bgo_opt_t  * tail;
-  bgo_info_t * info;
+  char       * desc;
+  char       *usage;
   size_t        len;
 } bgo_opts_t;
 
@@ -56,6 +50,7 @@ void bgo_add_name(bgo_opts_t *, const char*);
 void bgo_add_flag(bgo_opts_t *, const char*, const char*, int *);
 void bgo_add_int_flag(bgo_opts_t *, const char*, const char*, int *);
 void bgo_add_str_flag(bgo_opts_t *, const char*, const char*, char **);
+void bgo_add_mul_flag(bgo_opts_t *, const char*, const char*, char ***);
 void bgo(bgo_opts_t *, int, char **);
 void __bgo_disp_help(bgo_opts_t *);
 void __bgo_add_opt(bgo_opts_t *, bgo_opt_t *);
@@ -68,42 +63,56 @@ bgo_opt_t * __new_opt_t(const char*, const char*, enum bgo_type);
 
 void bgo_init(bgo_opts_t * opts) {
   opts -> head = NULL;
-  opts -> info = (bgo_info_t *)malloc(sizeof(bgo_info_t));
-  opts -> info -> usage = NULL;
-  opts -> info -> opts = (char**)malloc(sizeof(char*) * 100);
+  opts -> usage = NULL;
+  opts -> desc = NULL;
   opts -> len = 0;
 }
 
 void bgo_add_name(bgo_opts_t * opts, const char * name) {
-  if(opts -> info -> usage != NULL) free(opts -> info -> usage);
-
-  opts -> info -> usage = (char*)malloc(sizeof(char) * (strlen(name) + 17));
-  QUIT_ON_NULL(opts -> info -> usage, "(bgo.h) Couldn't allocate HEAP memory for command usage prompt.\n", -1);
+  if(opts -> usage != NULL) free(opts -> usage);
   
-  strcpy(opts -> info -> usage, "Usage: ");
-  strcat(opts -> info -> usage, name);
-  strcat(opts -> info -> usage, " [OPTIONS]\n");
+  opts -> usage = (char*)malloc( (strlen(name) + 17));
+  __BGO_QUIT_ON_NULL(opts -> usage, "(bgo.h) Couldn't allocate HEAP memory for command usage prompt.\n", -1);
+  
+  strcpy(opts -> usage, "Usage: ");
+  strcat(opts -> usage, name);
+  strcat(opts -> usage, " [OPTIONS]\n");
 }
 
 void bgo_add_desc(bgo_opts_t * opts, const char * desc) {
-  if(opts -> info -> desc != NULL) free(opts -> info -> desc);
+  if(opts -> desc != NULL) free(opts -> desc);
   
-  opts -> info -> desc = (char*)malloc(sizeof(char) * (strlen(desc) + 17));
-  QUIT_ON_NULL(opts -> info -> desc, "(bgo.h) Couldn't allocate HEAP memory for command description prompt.\n", -1);
+  opts -> desc = (char*)malloc( (strlen(desc) + 17));
+  __BGO_QUIT_ON_NULL(opts -> desc, "(bgo.h) Couldn't allocate HEAP memory for command description prompt.\n", -1);
   
-  strcpy(opts -> info -> desc, desc);
+  strcpy(opts -> desc, desc);
 }
 
 void __bgo_disp_help(bgo_opts_t * opts) {
-  QUIT_ON_NULL(opts -> info -> usage, "(bgo.h) Command name must be set.\n", -1);
+  __BGO_QUIT_ON_NULL(opts -> usage, "(bgo.h) Command name must be set.\n", -1);
 
-  printf("%s", opts -> info -> usage);
-  PRINTF_IF_NOT_NULL(opts -> info -> desc);
+  printf("%s", opts -> usage);
+  __BGO_PRINTF_NOT_NULL(opts -> desc);
 
   printf("\nOPTIONS:\n");
-  size_t iter = 0;
-  for(;iter < opts->len; iter++) {
-    printf("\t%s\n", (opts -> info -> opts)[iter]);
+  bgo_opt_t * opt = opts -> head;
+  for(;opt; opt = opt->next) {
+    printf("\t%s, %s ", (opt -> fv)[0], (opt->fv)[1]);
+    switch(opt->vtype) {
+      case BGO_INT:
+        printf("<INT>\n");
+        break;
+      case BGO_STR:
+        printf("<STR>\n");
+        break;
+      case BGO_MUL:
+        printf("<STR STR ...>\n");
+        break;
+      case BGO_BOOL:
+      default:
+        printf("\n");
+        break;
+    }
   }
 }
   
@@ -120,15 +129,15 @@ void __bgo_add_opt(bgo_opts_t * opts, bgo_opt_t * opt) {
 
 bgo_opt_t * __bgo_new_opt_t(const char *sf, const char *lf, void * value, enum bgo_type vtype) {
   bgo_opt_t * opt = (bgo_opt_t*)malloc(sizeof(bgo_opt_t));
-  QUIT_ON_NULL(opt, "(bgo.h) Couldn't allocate HEAP memory for boolean flag option.\n", -1);
+  __BGO_QUIT_ON_NULL(opt, "(bgo.h) Couldn't allocate HEAP memory for boolean flag option.\n", -1);
 
   opt -> fv = (char**)malloc(sizeof(char*) * 2);
-  QUIT_ON_NULL(opt -> fv, "(bgo.h) Couldn't allocate HEAP memory for boolean flag variants list.\n", -1);
+  __BGO_QUIT_ON_NULL(opt -> fv, "(bgo.h) Couldn't allocate HEAP memory for boolean flag variants list.\n", -1);
 
-  (opt -> fv)[0] = (char*)malloc(sizeof(char) * (strlen(sf) + 1));
-  (opt -> fv)[1] = (char*)malloc(sizeof(char) * (strlen(lf) + 1));
-  QUIT_ON_NULL((opt -> fv)[0], "(bgo.h) Couldn't allocate HEAP memory for boolean flag variants list.\n", -1);
-  QUIT_ON_NULL((opt -> fv)[1], "(bgo.h) Couldn't allocate HEAP memory for boolean flag variants list.\n", -1);
+  (opt -> fv)[0] = (char*)malloc( (strlen(sf) + 1));
+  (opt -> fv)[1] = (char*)malloc( (strlen(lf) + 1));
+  __BGO_QUIT_ON_NULL((opt -> fv)[0], "(bgo.h) Couldn't allocate HEAP memory for boolean flag variants list.\n", -1);
+  __BGO_QUIT_ON_NULL((opt -> fv)[1], "(bgo.h) Couldn't allocate HEAP memory for boolean flag variants list.\n", -1);
   strcpy((opt -> fv)[0], sf);
   strcpy((opt -> fv)[1], lf);
 
@@ -140,37 +149,10 @@ bgo_opt_t * __bgo_new_opt_t(const char *sf, const char *lf, void * value, enum b
   return opt;
 }
 
-void __info_add_fv(bgo_opts_t *opts, const char *sf, const char *lf, enum bgo_type vtype) {
-  size_t alen = 4;
-  if(vtype == BGO_BOOL) alen = 12;
-
-  (opts -> info -> opts)[opts->len] = (char*)malloc(sizeof(char) + (strlen(sf) + strlen(lf) + alen));
-  strcpy((opts -> info -> opts)[opts -> len], sf);
-  strcat((opts -> info -> opts)[opts -> len], ", ");
-  strcat((opts -> info -> opts)[opts -> len], lf);
-  
-  switch(vtype) {
-    case BGO_INT: 
-      strcat((opts -> info -> opts)[opts -> len], " <INT> ");
-      break;
-    case BGO_STR:
-      strcat((opts -> info -> opts)[opts -> len], " <STR> ");
-      break;
-    case BGO_BOOL:
-    default:
-      break;
-  }
-
-  opts -> len = (opts->len) + 1;
-
-}
-
 void __bgo_add(bgo_opts_t *opts, const char *sf, const char *lf, void *value, enum bgo_type vtype) {
   bgo_opt_t * opt = __bgo_new_opt_t(sf, lf, value, vtype);
 
   __bgo_add_opt(opts, opt);
-
-  __info_add_fv(opts, sf, lf, vtype);
 }
 
 void bgo_add_flag(bgo_opts_t *opts, const char *sf, const char *lf, int *value) {
@@ -185,15 +167,18 @@ void bgo_add_str_flag(bgo_opts_t *opts, const char *sf, const char *lf, char **v
   __bgo_add(opts, sf, lf, (void*)value, BGO_STR);
 }
 
+void bgo_add_mul_flag(bgo_opts_t *opts, const char *sf, const char *lf, char ***value) {
+  __bgo_add(opts, sf, lf, (void*)value, BGO_MUL);
+}
 
 void __bgo_set_bool(bgo_opt_t * opt) {
 
   if(opt -> vtype != BGO_BOOL)  {
-    EWRITEL("(bgo.h) Wrong type for ");
+    __BGO_EWRITEL("(bgo.h) Wrong type for ");
     write(2, (opt -> fv)[0], strlen((opt->fv)[0]));
-    EWRITEL(", ");
+    __BGO_EWRITEL(", ");
     write(2, (opt -> fv)[1], strlen((opt->fv)[1]));
-    EWRITEL(" bool flags.\n");
+    __BGO_EWRITEL(" bool flags.\n");
     exit(-1);
   }
   *((int*)(opt -> value)) = 1;
@@ -203,11 +188,11 @@ void __bgo_set_bool(bgo_opt_t * opt) {
 void __bgo_set_int(bgo_opt_t * opt, int value) {
 
   if(opt -> vtype != BGO_INT)  {
-    EWRITEL("(bgo.h) Wrong type for ");
+    __BGO_EWRITEL("(bgo.h) Wrong type for ");
     write(2, (opt -> fv)[0], strlen((opt->fv)[0]));
-    EWRITEL(", ");
+    __BGO_EWRITEL(", ");
     write(2, (opt -> fv)[1], strlen((opt->fv)[1]));
-    EWRITEL(" int flags.\n");
+    __BGO_EWRITEL(" int flags.\n");
     exit(-1);
   }
   *((int*)(opt -> value)) = value;
@@ -217,20 +202,43 @@ void __bgo_set_int(bgo_opt_t * opt, int value) {
 void __bgo_set_str(bgo_opt_t * opt, char * value) {
 
   if(opt -> vtype != BGO_STR)  {
-    EWRITEL("(bgo.h) Wrong type for ");
+    __BGO_EWRITEL("(bgo.h) Wrong type for ");
     write(2, (opt -> fv)[0], strlen((opt->fv)[0]));
-    EWRITEL(", ");
+    __BGO_EWRITEL(", ");
     write(2, (opt -> fv)[1], strlen((opt->fv)[1]));
-    EWRITEL(" string flags.\n");
+    __BGO_EWRITEL(" string flags.\n");
     exit(-1);
   }
 
 
   // TODO: FREE STUFF HERE ??
 
-  *((char**)(opt -> value)) = (char*)malloc(sizeof(char) * (strlen(value) + 1)); 
+  *((char**)(opt -> value)) = (char*)malloc( (strlen(value) + 1)); 
   strcpy(*((char**)(opt -> value)), value);
 
+}
+
+size_t __bgo_set_mul(bgo_opts_t * opts, bgo_opt_t * opt, int argc, char ** argv, size_t offset) {
+  size_t o_off = offset;
+  size_t count = 0;
+  while(offset < argc && __bgo_find_opt(opts, argv[offset]) == NULL) {
+    count++;
+    offset++;
+  }
+
+  if(count == 0) return o_off;
+
+  *((char***)(opt -> value)) = malloc(sizeof(char**) * (count + 1));
+
+  size_t iter = 0;
+  for(;o_off < offset; o_off++) {
+    (*((char***)(opt -> value)))[iter] = (char*)malloc(strlen(argv[o_off]) + 1);
+    strcpy((*((char***)(opt -> value)))[iter], argv[o_off]);
+    iter++;
+  }
+
+  (*((char***)(opt -> value)))[iter] = NULL;
+  return o_off - 1;
 }
 
 
@@ -272,6 +280,9 @@ void bgo(bgo_opts_t * opts, int argc, char ** argv) {
       case BGO_STR:
         __bgo_set_str(opt, argv[iter+1]);
         iter++;
+        break;
+      case BGO_MUL:
+        iter = __bgo_set_mul(opts, opt, argc, argv, iter + 1);
         break;
       default:
         break;
